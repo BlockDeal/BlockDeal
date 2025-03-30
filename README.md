@@ -100,4 +100,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Pi Network team for their support
 - Ethereum community for their tools and documentation
 - Next.js team for the amazing framework
-- All contributors and supporters 
+- All contributors and supporters
+
+Last updated: 2024-03-28 
