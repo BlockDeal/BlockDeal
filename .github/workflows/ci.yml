@@ -1,0 +1,158 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+          cache-dependency-path: package-lock.json
+          
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+      - name: Run type checking
+        run: npm run type-check
+        
+      - name: Run linting
+        run: npm run lint
+        
+      - name: Run tests
+        run: npm run test:ci
+        
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+          yml: ./codecov.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+          cache-dependency-path: package-lock.json
+          
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_ANALYTICS_ID: ${{ secrets.NEXT_PUBLIC_ANALYTICS_ID }}
+          NEXT_PUBLIC_WEB3_PROVIDER_URL: ${{ secrets.NEXT_PUBLIC_WEB3_PROVIDER_URL }}
+          NEXT_PUBLIC_CHAIN_ID: ${{ secrets.NEXT_PUBLIC_CHAIN_ID }}
+          NEXT_PUBLIC_NETWORK_NAME: ${{ secrets.NEXT_PUBLIC_NETWORK_NAME }}
+          NEXT_PUBLIC_PI_NETWORK_API_URL: ${{ secrets.NEXT_PUBLIC_PI_NETWORK_API_URL }}
+          NEXT_PUBLIC_PI_NETWORK_APP_ID: ${{ secrets.NEXT_PUBLIC_PI_NETWORK_APP_ID }}
+          NEXT_PUBLIC_PI_NETWORK_SECRET_KEY: ${{ secrets.NEXT_PUBLIC_PI_NETWORK_SECRET_KEY }}
+          NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS: ${{ secrets.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS }}
+          NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS: ${{ secrets.NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS }}
+          NEXT_PUBLIC_IPFS_GATEWAY: ${{ secrets.NEXT_PUBLIC_IPFS_GATEWAY }}
+          NEXT_PUBLIC_IPFS_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_IPFS_PROJECT_ID }}
+          NEXT_PUBLIC_IPFS_PROJECT_SECRET: ${{ secrets.NEXT_PUBLIC_IPFS_PROJECT_SECRET }}
+        
+      - name: Analyze bundle
+        run: npm run analyze
+        
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          path: .next
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+          cache-dependency-path: package-lock.json
+          
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_ANALYTICS_ID: ${{ secrets.NEXT_PUBLIC_ANALYTICS_ID }}
+          NEXT_PUBLIC_WEB3_PROVIDER_URL: ${{ secrets.NEXT_PUBLIC_WEB3_PROVIDER_URL }}
+          NEXT_PUBLIC_CHAIN_ID: ${{ secrets.NEXT_PUBLIC_CHAIN_ID }}
+          NEXT_PUBLIC_NETWORK_NAME: ${{ secrets.NEXT_PUBLIC_NETWORK_NAME }}
+          NEXT_PUBLIC_PI_NETWORK_API_URL: ${{ secrets.NEXT_PUBLIC_PI_NETWORK_API_URL }}
+          NEXT_PUBLIC_PI_NETWORK_APP_ID: ${{ secrets.NEXT_PUBLIC_PI_NETWORK_APP_ID }}
+          NEXT_PUBLIC_PI_NETWORK_SECRET_KEY: ${{ secrets.NEXT_PUBLIC_PI_NETWORK_SECRET_KEY }}
+          NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS: ${{ secrets.NEXT_PUBLIC_MARKETPLACE_CONTRACT_ADDRESS }}
+          NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS: ${{ secrets.NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS }}
+          NEXT_PUBLIC_IPFS_GATEWAY: ${{ secrets.NEXT_PUBLIC_IPFS_GATEWAY }}
+          NEXT_PUBLIC_IPFS_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_IPFS_PROJECT_ID }}
+          NEXT_PUBLIC_IPFS_PROJECT_SECRET: ${{ secrets.NEXT_PUBLIC_IPFS_PROJECT_SECRET }}
+        
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID}}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID}}
+          vercel-args: '--prod'
+          vercel-working-directory: ./
+          vercel-alias-domains: ${{ secrets.VERCEL_ALIAS_DOMAINS }} 
